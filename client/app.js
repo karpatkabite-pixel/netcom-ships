@@ -1,4 +1,3 @@
-
 const socket = io();
 
 let currentRoom = null;
@@ -97,8 +96,9 @@ function render(room) {
   const target = players[room.targetIndex];
   const attacker = players[room.attackerIndex];
 
-  document.getElementById("turn").innerText =
-    `Target: ${target.name} | Turn: ${attacker.name}`;
+  let text = `Target: ${target.name} | Turn: ${attacker.name}`;
+  if (me.id === target.id) text += " (YOU ARE TARGET)";
+  document.getElementById("turn").innerText = text;
 
   const isMyTurn = attacker.id === socket.id;
   const shots = room.shots || {};
@@ -110,12 +110,10 @@ function render(room) {
 
       const key = `${x},${y},${target.id}`;
 
-      // your ships
       if (me.grid && me.grid[y][x] === 1) {
         div.style.background = "#333";
       }
 
-      // shots
       if (shots[key]) {
         if (shots[key].result === "hit") {
           div.textContent = "X";
