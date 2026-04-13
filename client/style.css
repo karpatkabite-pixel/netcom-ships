@@ -1,0 +1,28 @@
+body {
+  font-family: monospace;
+  text-align: center;
+  background: #f5f5f5;
+}
+
+#grid {
+  display: grid;
+  grid-template-columns: repeat(10, 30px);
+  gap: 2px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.cell {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #333;
+  cursor: pointer;
+}
+
+.cell.hit {
+  background: red;
+}
+
+.cell.ship {
+  background: black;
+}
