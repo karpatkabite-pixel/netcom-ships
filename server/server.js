@@ -85,7 +85,7 @@ io.on("connection", (socket) => {
       target.hits++;
       hit = true;
 
-      if (target.hits >= 10) {
+      if (target.hits >= 20) { // total ship tiles
         target.alive = false;
       }
     }
@@ -95,40 +95,37 @@ io.on("connection", (socket) => {
       targetId: target.id
     };
 
-    // WIN CHECK
-    const alivePlayersCheck = players.filter(p => p.alive);
-    if (alivePlayersCheck.length === 1) {
-      io.to(roomId).emit("gameOver", alivePlayersCheck[0].name);
+    // win check
+    const alive = players.filter(p => p.alive);
+    if (alive.length === 1) {
+      io.to(roomId).emit("gameOver", alive[0].name);
       return;
     }
 
-    // ===== FIXED ROTATION SYSTEM =====
-
+    // ===== FIXED ROTATION =====
     const alivePlayers = players
       .map((p, i) => ({ ...p, index: i }))
       .filter(p => p.alive);
 
-    const targetAliveIndex = alivePlayers.findIndex(p => p.index === room.targetIndex);
-    const attackerAliveIndex = alivePlayers.findIndex(p => p.index === room.attackerIndex);
+    const tIndex = alivePlayers.findIndex(p => p.index === room.targetIndex);
+    const aIndex = alivePlayers.findIndex(p => p.index === room.attackerIndex);
 
-    let nextAliveIndex = (attackerAliveIndex + 1) % alivePlayers.length;
+    let next = (aIndex + 1) % alivePlayers.length;
 
-    // if next = target → rotate target
-    if (alivePlayers[nextAliveIndex].index === room.targetIndex) {
+    if (alivePlayers[next].index === room.targetIndex) {
+      const newTarget = (tIndex + 1) % alivePlayers.length;
+      room.targetIndex = alivePlayers[newTarget].index;
 
-      const newTargetAliveIndex = (targetAliveIndex + 1) % alivePlayers.length;
-      room.targetIndex = alivePlayers[newTargetAliveIndex].index;
+      let nextAttacker = (newTarget + 1) % alivePlayers.length;
 
-      let nextAttackerAliveIndex = (newTargetAliveIndex + 1) % alivePlayers.length;
-
-      if (alivePlayers[nextAttackerAliveIndex].index === room.targetIndex) {
-        nextAttackerAliveIndex = (nextAttackerAliveIndex + 1) % alivePlayers.length;
+      if (alivePlayers[nextAttacker].index === room.targetIndex) {
+        nextAttacker = (nextAttacker + 1) % alivePlayers.length;
       }
 
-      room.attackerIndex = alivePlayers[nextAttackerAliveIndex].index;
+      room.attackerIndex = alivePlayers[nextAttacker].index;
 
     } else {
-      room.attackerIndex = alivePlayers[nextAliveIndex].index;
+      room.attackerIndex = alivePlayers[next].index;
     }
 
     sendRoom(roomId);
