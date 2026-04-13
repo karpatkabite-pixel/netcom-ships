@@ -14,11 +14,15 @@
   <button onclick="joinRoom()">Join</button>
 </div>
 
+<div id="placement" style="display:none;">
+  <h2>Place your ships (10)</h2>
+  <p id="shipsLeft"></p>
+  <div id="placementGrid"></div>
+  <button onclick="confirmPlacement()">Confirm</button>
+</div>
+
 <div id="game" style="display:none;">
-  <button onclick="startGame()">Start Game</button>
-
   <h2 id="turn"></h2>
-
   <div id="grid"></div>
 </div>
 
