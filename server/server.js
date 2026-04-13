@@ -95,28 +95,41 @@ io.on("connection", (socket) => {
       targetId: target.id
     };
 
-    const alivePlayers = players.filter(p => p.alive);
-    if (alivePlayers.length === 1) {
-      io.to(roomId).emit("gameOver", alivePlayers[0].name);
+    // WIN CHECK
+    const alivePlayersCheck = players.filter(p => p.alive);
+    if (alivePlayersCheck.length === 1) {
+      io.to(roomId).emit("gameOver", alivePlayersCheck[0].name);
       return;
     }
 
-    // next attacker
-    let next = room.attackerIndex;
+    // ===== FIXED ROTATION SYSTEM =====
 
-    do {
-      next = (next + 1) % players.length;
-    } while (!players[next].alive || next === room.targetIndex);
+    const alivePlayers = players
+      .map((p, i) => ({ ...p, index: i }))
+      .filter(p => p.alive);
 
-    // if loop completed → change target
-    if (next === (room.targetIndex + 1) % players.length) {
-      do {
-        room.targetIndex =
-          (room.targetIndex + 1) % players.length;
-      } while (!players[room.targetIndex].alive);
+    const targetAliveIndex = alivePlayers.findIndex(p => p.index === room.targetIndex);
+    const attackerAliveIndex = alivePlayers.findIndex(p => p.index === room.attackerIndex);
+
+    let nextAliveIndex = (attackerAliveIndex + 1) % alivePlayers.length;
+
+    // if next = target → rotate target
+    if (alivePlayers[nextAliveIndex].index === room.targetIndex) {
+
+      const newTargetAliveIndex = (targetAliveIndex + 1) % alivePlayers.length;
+      room.targetIndex = alivePlayers[newTargetAliveIndex].index;
+
+      let nextAttackerAliveIndex = (newTargetAliveIndex + 1) % alivePlayers.length;
+
+      if (alivePlayers[nextAttackerAliveIndex].index === room.targetIndex) {
+        nextAttackerAliveIndex = (nextAttackerAliveIndex + 1) % alivePlayers.length;
+      }
+
+      room.attackerIndex = alivePlayers[nextAttackerAliveIndex].index;
+
+    } else {
+      room.attackerIndex = alivePlayers[nextAliveIndex].index;
     }
-
-    room.attackerIndex = next;
 
     sendRoom(roomId);
   });
