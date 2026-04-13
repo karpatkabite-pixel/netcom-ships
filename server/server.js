@@ -33,21 +33,32 @@ io.on("connection", (socket) => {
     room.players.push({
       id: socket.id,
       name,
-      grid: createGrid(),
+      grid: null,
       hits: 0,
-      alive: true
+      alive: true,
+      ready: false
     });
 
     sendRoom(roomId);
   });
 
-  socket.on("startGame", (roomId) => {
+  socket.on("placeShips", ({ roomId, grid }) => {
     const room = rooms[roomId];
-    if (!room || room.players.length < 2) return;
+    if (!room) return;
 
-    room.started = true;
-    room.targetIndex = 0;
-    room.attackerIndex = 1;
+    const player = room.players.find(p => p.id === socket.id);
+    if (!player) return;
+
+    player.grid = grid;
+    player.ready = true;
+
+    const allReady = room.players.every(p => p.ready);
+
+    if (allReady && room.players.length >= 2) {
+      room.started = true;
+      room.targetIndex = 0;
+      room.attackerIndex = 1;
+    }
 
     sendRoom(roomId);
   });
@@ -84,21 +95,20 @@ io.on("connection", (socket) => {
       targetId: target.id
     };
 
-    // WIN CHECK
     const alivePlayers = players.filter(p => p.alive);
     if (alivePlayers.length === 1) {
       io.to(roomId).emit("gameOver", alivePlayers[0].name);
       return;
     }
 
-    // NEXT ATTACKER
+    // next attacker
     let next = room.attackerIndex;
 
     do {
       next = (next + 1) % players.length;
     } while (!players[next].alive || next === room.targetIndex);
 
-    // IF WE LOOPED → CHANGE TARGET
+    // if loop completed → change target
     if (next === (room.targetIndex + 1) % players.length) {
       do {
         room.targetIndex =
@@ -121,7 +131,8 @@ function sendRoom(roomId) {
       players: room.players.map(p => ({
         id: p.id,
         name: p.name,
-        alive: p.alive
+        alive: p.alive,
+        ready: p.ready
       })),
       shots: room.shots,
       targetIndex: room.targetIndex,
@@ -130,24 +141,6 @@ function sendRoom(roomId) {
       me: player
     });
   });
-}
-
-function createGrid() {
-  const grid = [];
-  let ships = 0;
-
-  for (let y = 0; y < 10; y++) {
-    grid[y] = [];
-    for (let x = 0; x < 10; x++) {
-      if (Math.random() > 0.85 && ships < 10) {
-        grid[y][x] = 1;
-        ships++;
-      } else {
-        grid[y][x] = 0;
-      }
-    }
-  }
-  return grid;
 }
 
 server.listen(PORT, () => {
