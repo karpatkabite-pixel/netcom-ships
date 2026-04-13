@@ -11,22 +11,20 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, "../client")));
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "../client/index.html"));
-});
-
 const rooms = {};
 
 io.on("connection", (socket) => {
+
   socket.on("joinRoom", ({ roomId, name }) => {
     socket.join(roomId);
 
     if (!rooms[roomId]) {
       rooms[roomId] = {
         players: [],
-        turnIndex: 0,
         started: false,
-        shots: {}
+        shots: {},
+        targetIndex: 0,
+        attackerIndex: 1
       };
     }
 
@@ -40,59 +38,99 @@ io.on("connection", (socket) => {
       alive: true
     });
 
-    io.to(roomId).emit("roomUpdate", room);
+    sendRoom(roomId);
   });
 
   socket.on("startGame", (roomId) => {
     const room = rooms[roomId];
-    if (!room) return;
+    if (!room || room.players.length < 2) return;
 
     room.started = true;
-    io.to(roomId).emit("roomUpdate", room);
+    room.targetIndex = 0;
+    room.attackerIndex = 1;
+
+    sendRoom(roomId);
   });
 
   socket.on("attack", ({ roomId, x, y }) => {
     const room = rooms[roomId];
     if (!room || !room.started) return;
 
-    const attacker = room.players[room.turnIndex];
-    if (attacker.id !== socket.id) return;
+    const players = room.players;
+    const attacker = players[room.attackerIndex];
+    const target = players[room.targetIndex];
 
-    const key = `${x},${y}`;
+    if (!attacker || !target) return;
+    if (attacker.id !== socket.id) return;
+    if (!attacker.alive || !target.alive) return;
+
+    const key = `${x},${y},${target.id}`;
     if (room.shots[key]) return;
 
     let hit = false;
 
-    room.players.forEach((player) => {
-      if (player.id !== attacker.id && player.alive) {
-        if (player.grid[y][x] === 1) {
-          player.grid[y][x] = 2;
-          player.hits++;
-          hit = true;
+    if (target.grid[y][x] === 1) {
+      target.grid[y][x] = 2;
+      target.hits++;
+      hit = true;
 
-          if (player.hits >= 10) {
-            player.alive = false;
-          }
-        }
+      if (target.hits >= 10) {
+        target.alive = false;
       }
-    });
+    }
 
-    room.shots[key] = hit ? "hit" : "miss";
+    room.shots[key] = {
+      result: hit ? "hit" : "miss",
+      targetId: target.id
+    };
 
-    const alivePlayers = room.players.filter(p => p.alive);
+    // WIN CHECK
+    const alivePlayers = players.filter(p => p.alive);
     if (alivePlayers.length === 1) {
       io.to(roomId).emit("gameOver", alivePlayers[0].name);
       return;
     }
 
-    do {
-      room.turnIndex =
-        (room.turnIndex + 1) % room.players.length;
-    } while (!room.players[room.turnIndex].alive);
+    // NEXT ATTACKER
+    let next = room.attackerIndex;
 
-    io.to(roomId).emit("roomUpdate", room);
+    do {
+      next = (next + 1) % players.length;
+    } while (!players[next].alive || next === room.targetIndex);
+
+    // IF WE LOOPED → CHANGE TARGET
+    if (next === (room.targetIndex + 1) % players.length) {
+      do {
+        room.targetIndex =
+          (room.targetIndex + 1) % players.length;
+      } while (!players[room.targetIndex].alive);
+    }
+
+    room.attackerIndex = next;
+
+    sendRoom(roomId);
   });
+
 });
+
+function sendRoom(roomId) {
+  const room = rooms[roomId];
+
+  room.players.forEach(player => {
+    io.to(player.id).emit("roomUpdate", {
+      players: room.players.map(p => ({
+        id: p.id,
+        name: p.name,
+        alive: p.alive
+      })),
+      shots: room.shots,
+      targetIndex: room.targetIndex,
+      attackerIndex: room.attackerIndex,
+      started: room.started,
+      me: player
+    });
+  });
+}
 
 function createGrid() {
   const grid = [];
