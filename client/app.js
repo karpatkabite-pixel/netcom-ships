@@ -64,8 +64,6 @@ function render(room) {
       grid.appendChild(div);
     }
   }
-
-  if (!room.started) {
-    document.getElementById("startBtn").style.display = "block";
+document.getElementById("startBtn").style.display = "block";
   }
 }
