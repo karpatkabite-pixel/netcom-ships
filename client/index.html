@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Netcom Ships</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<h1>Netcom Ships</h1>
+
+<div id="join">
+  <input id="name" placeholder="Your name" />
+  <input id="room" placeholder="Room ID" />
+  <button onclick="joinRoom()">Join</button>
+</div>
+
+<div id="game" style="display:none;">
+  <h2 id="turn"></h2>
+  <div id="grid"></div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
