@@ -2,7 +2,15 @@ const socket = io();
 
 let currentRoom = null;
 let myGrid = [];
-let shipsToPlace = 10;
+let selectedShip = null;
+let direction = "horizontal";
+
+let shipTypes = [
+  { size: 4, count: 2 },
+  { size: 3, count: 3 },
+  { size: 2, count: 4 },
+  { size: 1, count: 5 }
+];
 
 function joinRoom() {
   const name = document.getElementById("name").value;
@@ -15,14 +23,14 @@ function joinRoom() {
   document.getElementById("join").style.display = "none";
   document.getElementById("placement").style.display = "block";
 
-  initPlacementGrid();
+  initGrid();
+  renderShips();
 }
 
-function initPlacementGrid() {
+function initGrid() {
   const grid = document.getElementById("placementGrid");
   grid.innerHTML = "";
 
-  shipsToPlace = 10;
   myGrid = [];
 
   for (let y = 0; y < 10; y++) {
@@ -34,34 +42,81 @@ function initPlacementGrid() {
       const div = document.createElement("div");
       div.className = "cell";
 
-      div.onclick = () => {
-        if (shipsToPlace <= 0) return;
-
-        if (myGrid[y][x] === 0) {
-          myGrid[y][x] = 1;
-          div.style.background = "#333";
-          shipsToPlace--;
-          updateShipsLeft();
-        }
-      };
+      div.onclick = () => tryPlace(x, y);
 
       grid.appendChild(div);
     }
   }
-
-  updateShipsLeft();
 }
 
-function updateShipsLeft() {
-  document.getElementById("shipsLeft").innerText =
-    "Ships left: " + shipsToPlace;
+function renderShips() {
+  const panel = document.getElementById("shipsPanel");
+  panel.innerHTML = "";
+
+  shipTypes.forEach(s => {
+    if (s.count <= 0) return;
+
+    const btn = document.createElement("button");
+    btn.textContent = `${s.size} (${s.count})`;
+
+    btn.onclick = () => selectedShip = s.size;
+
+    panel.appendChild(btn);
+  });
+}
+
+function tryPlace(x, y) {
+  if (!selectedShip) return;
+
+  if (!canPlace(x, y, selectedShip)) return;
+
+  for (let i = 0; i < selectedShip; i++) {
+    let nx = x + (direction === "horizontal" ? i : 0);
+    let ny = y + (direction === "vertical" ? i : 0);
+
+    myGrid[ny][nx] = 1;
+
+    const index = ny * 10 + nx;
+    document.getElementById("placementGrid").children[index].style.background = "#333";
+  }
+
+  const ship = shipTypes.find(s => s.size === selectedShip);
+  ship.count--;
+
+  if (ship.count === 0) selectedShip = null;
+
+  renderShips();
+}
+
+function canPlace(x, y, size) {
+  for (let i = 0; i < size; i++) {
+    let nx = x + (direction === "horizontal" ? i : 0);
+    let ny = y + (direction === "vertical" ? i : 0);
+
+    if (nx >= 10 || ny >= 10) return false;
+
+    if (myGrid[ny][nx] === 1) return false;
+
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        let cx = nx + dx;
+        let cy = ny + dy;
+
+        if (
+          cx >= 0 && cx < 10 &&
+          cy >= 0 && cy < 10 &&
+          myGrid[cy][cx] === 1
+        ) return false;
+      }
+    }
+  }
+
+  return true;
 }
 
 function confirmPlacement() {
-  if (shipsToPlace > 0) {
-    alert("Place all ships first!");
-    return;
-  }
+  const remaining = shipTypes.some(s => s.count > 0);
+  if (remaining) return alert("Place all ships");
 
   socket.emit("placeShips", {
     roomId: currentRoom,
@@ -72,18 +127,13 @@ function confirmPlacement() {
   document.getElementById("game").style.display = "block";
 }
 
-socket.on("roomUpdate", (room) => {
-  render(room);
-});
+socket.on("roomUpdate", render);
 
-socket.on("gameOver", (winner) => {
-  alert("Winner: " + winner);
-});
+socket.on("gameOver", w => alert("Winner: " + w));
 
 function render(room) {
   if (!room.started) {
-    document.getElementById("turn").innerText =
-      "Waiting for all players...";
+    document.getElementById("turn").innerText = "Waiting...";
     return;
   }
 
@@ -91,20 +141,18 @@ function render(room) {
   grid.innerHTML = "";
 
   const me = room.me;
-  const players = room.players;
+  const target = room.players[room.targetIndex];
+  const attacker = room.players[room.attackerIndex];
 
-  const target = players[room.targetIndex];
-  const attacker = players[room.attackerIndex];
-
-  let text = `Target: ${target.name} | Turn: ${attacker.name}`;
-  if (me.id === target.id) text += " (YOU ARE TARGET)";
-  document.getElementById("turn").innerText = text;
+  let txt = `Target: ${target.name} | Turn: ${attacker.name}`;
+  if (me.id === target.id) txt += " (YOU ARE TARGET)";
+  document.getElementById("turn").innerText = txt;
 
   const isMyTurn = attacker.id === socket.id;
-  const shots = room.shots || {};
 
   for (let y = 0; y < 10; y++) {
     for (let x = 0; x < 10; x++) {
+
       const div = document.createElement("div");
       div.className = "cell";
 
@@ -114,22 +162,14 @@ function render(room) {
         div.style.background = "#333";
       }
 
-      if (shots[key]) {
-        if (shots[key].result === "hit") {
-          div.textContent = "X";
-          div.style.color = "red";
-        } else {
-          div.textContent = "•";
-        }
+      if (room.shots[key]) {
+        div.textContent =
+          room.shots[key].result === "hit" ? "X" : "•";
       }
 
-      if (room.started && isMyTurn) {
+      if (isMyTurn) {
         div.onclick = () => {
-          socket.emit("attack", {
-            roomId: currentRoom,
-            x,
-            y
-          });
+          socket.emit("attack", { roomId: currentRoom, x, y });
         };
       }
 
@@ -137,3 +177,10 @@ function render(room) {
     }
   }
 }
+
+// rotate ships
+document.addEventListener("keydown", (e) => {
+  if (e.key === "r") {
+    direction = direction === "horizontal" ? "vertical" : "horizontal";
+  }
+});
