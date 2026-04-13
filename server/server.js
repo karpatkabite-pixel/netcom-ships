@@ -25,7 +25,8 @@ io.on("connection", (socket) => {
       rooms[roomId] = {
         players: [],
         turnIndex: 0,
-        started: false
+        started: false,
+        shots: {}
       };
     }
 
@@ -57,53 +58,52 @@ io.on("connection", (socket) => {
     const attacker = room.players[room.turnIndex];
     if (attacker.id !== socket.id) return;
 
-    let results = [];
+    const key = `${x},${y}`;
+    if (room.shots[key]) return;
+
+    let hit = false;
 
     room.players.forEach((player) => {
       if (player.id !== attacker.id && player.alive) {
         if (player.grid[y][x] === 1) {
           player.grid[y][x] = 2;
           player.hits++;
+          hit = true;
 
           if (player.hits >= 10) {
             player.alive = false;
           }
-
-          results.push(`${player.name} HIT`);
-        } else {
-          results.push(`${player.name} MISS`);
         }
       }
     });
 
-    // check win
+    room.shots[key] = hit ? "hit" : "miss";
+
     const alivePlayers = room.players.filter(p => p.alive);
     if (alivePlayers.length === 1) {
       io.to(roomId).emit("gameOver", alivePlayers[0].name);
       return;
     }
 
-    // next turn (skip dead players)
     do {
       room.turnIndex =
         (room.turnIndex + 1) % room.players.length;
     } while (!room.players[room.turnIndex].alive);
 
-    io.to(roomId).emit("attackResult", results);
     io.to(roomId).emit("roomUpdate", room);
   });
 });
 
 function createGrid() {
   const grid = [];
-  let shipsPlaced = 0;
+  let ships = 0;
 
   for (let y = 0; y < 10; y++) {
     grid[y] = [];
     for (let x = 0; x < 10; x++) {
-      if (Math.random() > 0.85 && shipsPlaced < 10) {
+      if (Math.random() > 0.85 && ships < 10) {
         grid[y][x] = 1;
-        shipsPlaced++;
+        ships++;
       } else {
         grid[y][x] = 0;
       }
